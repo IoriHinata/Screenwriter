@@ -101,7 +101,7 @@ Java_ru_screenwriter_app_LocalLlamaEngine_nativeGenerate(
     std::vector<llama_token> tokens(std::max(1024, static_cast<int>(prompt.size() / 2 + 16)));
     int32_t token_count = llama_tokenize(g_vocab, prompt.c_str(),
         static_cast<int32_t>(prompt.size()), tokens.data(),
-        static_cast<int32_t>(tokens.size()), true, false);
+        static_cast<int32_t>(tokens.size()), true, true);
     if (token_count < 0) {
         tokens.resize(static_cast<size_t>(-token_count));
         token_count = llama_tokenize(g_vocab, prompt.c_str(),
