@@ -428,25 +428,25 @@ object OfflineStoryEngine {
 private fun buildExport(story: Story, screenplay: Boolean): String {
     val out = StringBuilder()
     if (!screenplay) {
-        out.append(story.title.uppercase()).append("\\n\\n")
-        if (story.genre.isNotBlank()) out.append(story.genre).append("\\n\\n")
+        out.append(story.title.uppercase()).append("\n\n")
+        if (story.genre.isNotBlank()) out.append(story.genre).append("\n\n")
         story.scenes.forEachIndexed { index, scene ->
-            out.append("Глава ").append(index + 1).append("\\n\\n")
-            out.append(scene.text.trim()).append("\\n\\n")
+            out.append("Глава ").append(index + 1).append("\n\n")
+            out.append(scene.text.trim()).append("\n\n")
         }
-        if (story.scenes.isEmpty()) out.append("История пока не содержит сцен.\\n")
+        if (story.scenes.isEmpty()) out.append("История пока не содержит сцен.\n")
     } else {
-        out.append(story.title.uppercase()).append("\\n")
-        out.append("СЦЕНАРИЙ · ").append(story.genre.uppercase()).append("\\n\\n")
+        out.append(story.title.uppercase()).append("\n")
+        out.append("СЦЕНАРИЙ · ").append(story.genre.uppercase()).append("\n\n")
         story.scenes.forEachIndexed { index, scene ->
-            out.append("СЦЕНА ${index + 1} — ${scene.kind.uppercase()}\\n")
-            out.append("ИНТ. / НАТ. — МЕСТО НЕ УКАЗАНО — ВРЕМЯ НЕ УКАЗАНО\\n\\n")
-            out.append(scene.text.trim()).append("\\n\\n")
+            out.append("СЦЕНА ${index + 1} — ${scene.kind.uppercase()}\n")
+            out.append("ИНТ. / НАТ. — МЕСТО НЕ УКАЗАНО — ВРЕМЯ НЕ УКАЗАНО\n\n")
+            out.append(scene.text.trim()).append("\n\n")
         }
-        if (story.scenes.isEmpty()) out.append("Сцен пока нет.\\n")
+        if (story.scenes.isEmpty()) out.append("Сцен пока нет.\n")
     }
-    out.append("\\n---\\nМир: ").append(story.world).append("\\nСеттинг: ").append(story.setting)
-    out.append("\\nПерсонажи:\\n").append(story.characters)
-    out.append("\\nСобытия:\\n").append(story.events)
+    out.append("\n---\nМир: ").append(story.world).append("\nСеттинг: ").append(story.setting)
+    out.append("\nПерсонажи:\n").append(story.characters)
+    out.append("\nСобытия:\n").append(story.events)
     return out.toString()
 }
