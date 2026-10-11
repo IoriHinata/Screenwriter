@@ -570,24 +570,24 @@ object StoryPromptBuilder {
         if (story.scenes.isEmpty()) append("[Сцен пока нет]") else {
             val compactCount = (story.scenes.size - FULL_SCENES).coerceAtLeast(0)
             if (compactCount > 0) {
-                append("АРХИВ СЦЕН (компактный канон; полные выдержки важных сцен добавляются ниже):\\n")
+                append("АРХИВ СЦЕН (компактный канон; полные выдержки важных сцен добавляются ниже):\n")
                 val archiveIndices = (listOf(0, 1) + (2 until compactCount).takeLast(10)).distinct().filter { it in 0 until compactCount }
                 archiveIndices.forEach { index ->
                     val scene = story.scenes[index]
                     val text = scene.text
-                    append("\\n--- СЦЕНА ").append(index + 1).append(" · ").append(scene.kind).append(" ---\\n")
-                    if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command.take(160)).append("\\n")
+                    append("\n--- СЦЕНА ").append(index + 1).append(" · ").append(scene.kind).append(" ---\n")
+                    if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command.take(160)).append("\n")
                     if (text.length <= 240) append(text) else append(text.take(120)).append(" […] ").append(text.takeLast(120))
-                    append("\\n")
+                    append("\n")
                 }
-                if (compactCount > archiveIndices.size) append("\\n[В архиве ещё ").append(compactCount - archiveIndices.size).append(" сцен; не выдумывай их содержание.]\\n")
+                if (compactCount > archiveIndices.size) append("\n[В архиве ещё ").append(compactCount - archiveIndices.size).append(" сцен; не выдумывай их содержание.]\n")
             }
             story.scenes.takeLast(FULL_SCENES).forEachIndexed { index, scene ->
-                append("\\n--- ПОСЛЕДНЯЯ ЧАСТЬ КАНОНА · СЦЕНА ").append(compactCount + index + 1).append(" · ").append(scene.kind).append(" ---\\n")
-                if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command.take(220)).append("\\n")
+                append("\n--- ПОСЛЕДНЯЯ ЧАСТЬ КАНОНА · СЦЕНА ").append(compactCount + index + 1).append(" · ").append(scene.kind).append(" ---\n")
+                if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command.take(220)).append("\n")
                 append(scene.text.take(MAX_SCENE_CHARS))
-                if (scene.text.length > MAX_SCENE_CHARS) append("\\n[… сцена обрезана по бюджету контекста …]")
-                append("\\n")
+                if (scene.text.length > MAX_SCENE_CHARS) append("\n[… сцена обрезана по бюджету контекста …]")
+                append("\n")
             }
         }
         append("\nПеред ответом проверь знания персонажей, предметы, обещания, травмы, отношения, хронологию и незакрытые сюжетные вопросы. При переписывании сцены не изменяй предыдущие сцены.")
