@@ -209,6 +209,9 @@ fun ScreenwriterApp(store: StoryStore) {
 
 @Composable
 fun HomeScreen(stories: List<Story>, onCreate: () -> Unit, onImport: () -> Unit, onOpen: (Long) -> Unit, onSettings: () -> Unit) {
+    var selectedFolder by remember { mutableStateOf("Все проекты") }
+    val folders = listOf("Все проекты") + stories.map { it.folder.ifBlank { "Без папки" } }.distinct().sorted()
+    val visibleStories = if (selectedFolder == "Все проекты") stories else stories.filter { (it.folder.ifBlank { "Без папки" }) == selectedFolder }
     Column(Modifier.fillMaxSize().background(Ink).padding(horizontal = 22.dp)) {
         Spacer(Modifier.height(24.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -244,7 +247,15 @@ fun HomeScreen(stories: List<Story>, onCreate: () -> Unit, onImport: () -> Unit,
             Spacer(Modifier.weight(1f)); Text("${stories.size}", color = Gold, fontSize = 13.sp)
         }
         Spacer(Modifier.height(12.dp))
-        if (stories.isEmpty()) {
+        if (folders.size > 1) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                folders.forEach { folder ->
+                    FilterChip(selected = selectedFolder == folder, onClick = { selectedFolder = folder }, label = { Text(folder, fontSize = 11.sp) })
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+        if (visibleStories.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.MenuBook, null, tint = Panel2, modifier = Modifier.size(64.dp))
@@ -255,7 +266,7 @@ fun HomeScreen(stories: List<Story>, onCreate: () -> Unit, onImport: () -> Unit,
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                itemsIndexed(stories) { _, story ->
+                itemsIndexed(visibleStories) { _, story ->
                     Row(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(18.dp)).clickable { onOpen(story.id) }.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(48.dp).background(Panel2, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
