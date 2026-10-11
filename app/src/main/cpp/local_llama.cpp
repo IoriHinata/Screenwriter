@@ -90,7 +90,14 @@ Java_ru_screenwriter_app_LocalLlamaEngine_nativeGenerate(
     if (prompt.empty()) return env->NewStringUTF("");
     llama_memory_clear(llama_get_memory(g_context), true);
 
-    (void) temperature; // Sampling temperature is currently fixed to a literary-writing preset.
+    if (g_sampler) llama_sampler_free(g_sampler);
+    auto sampler_params = llama_sampler_chain_default_params();
+    g_sampler = llama_sampler_chain_init(sampler_params);
+    if (!g_sampler) return env->NewStringUTF("ОШИБКА: не удалось создать сэмплер генерации.");
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(40));
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(0.92f, 1));
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(std::max(0.1f, std::min(1.5f, static_cast<float>(temperature)))));
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
     std::vector<llama_token> tokens(std::max(1024, static_cast<int>(prompt.size() / 2 + 16)));
     int32_t token_count = llama_tokenize(g_vocab, prompt.c_str(),
         static_cast<int32_t>(prompt.size()), tokens.data(),
