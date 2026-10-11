@@ -6,14 +6,28 @@ plugins {
 android {
     namespace = "ru.screenwriter.app"
     compileSdk = 35
+    ndkVersion = "27.2.12479018"
     defaultConfig {
         applicationId = "ru.screenwriter.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "2.0.0"
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        externalNativeBuild {
+            cmake {
+                arguments += "-DLLAMA_CPP_DIR=${rootProject.projectDir}/external/llama.cpp"
+                arguments += "-DGGML_OPENMP=OFF"
+                arguments += "-DGGML_LLAMAFILE=OFF"
+                arguments += "-DGGML_NATIVE=OFF"
+                arguments += "-DGGML_BACKEND_DL=OFF"
+            }
+        }
     }
     buildFeatures { compose = true }
+    externalNativeBuild {
+        cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
