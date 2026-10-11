@@ -28,10 +28,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Accept Android SDK licenses
-        run: |
-          set +o pipefail
-          yes | sdkmanager --licenses
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
       - name: Install native build tools
         run: sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
       - name: Set up Gradle
