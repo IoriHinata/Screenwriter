@@ -36,4 +36,23 @@ class StoryPromptBuilderTest {
         assertTrue(prompt.contains("Черновик"))
         assertTrue(prompt.contains("[Сцен пока нет]"))
     }
+
+    @Test
+    fun eachWritingModeHasAnExplicitInstruction() {
+        val story = Story(title = "Проверка")
+        assertTrue(StoryPromptBuilder.systemPrompt(story, "Критик").contains("редакторскую критику"))
+        assertTrue(StoryPromptBuilder.systemPrompt(story, "Диалог").contains("живой диалог"))
+        assertTrue(StoryPromptBuilder.systemPrompt(story, "Проверить канон").contains("Проверь противоречия"))
+    }
+
+    @Test
+    fun contextIncludesRelevantOlderSceneForContinuity() {
+        val scenes = (1..12).map { number ->
+            Scene("Событие $number", if (number == 2) "В старом архиве спрятан красный ключ, который открывает дверь." else "Сцена $number: обычные события.", "Сцена")
+        }.toMutableList()
+        val story = Story(title = "Архив", scenes = scenes)
+        val prompt = StoryPromptBuilder.generationPrompt(story, "Продолжить", "Найди красный ключ")
+        assertTrue(prompt.contains("красный ключ"))
+        assertTrue(prompt.contains("КОМАНДА АВТОРА"))
+    }
 }
