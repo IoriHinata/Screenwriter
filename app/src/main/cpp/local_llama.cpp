@@ -107,22 +107,27 @@ Java_ru_screenwriter_app_LocalLlamaEngine_nativeGenerate(
         tokens.erase(tokens.begin(), tokens.end() - prompt_limit);
     }
 
-    llama_batch batch = llama_batch_init(static_cast<int32_t>(tokens.size()) + 1, 0, 1);
+    const int32_t batch_capacity = static_cast<int32_t>(std::min<uint32_t>(512, llama_n_batch(g_context)));
+    llama_batch batch = llama_batch_init(batch_capacity, 0, 1);
     if (!batch.token || !batch.pos || !batch.n_seq_id || !batch.seq_id || !batch.logits) {
         llama_batch_free(batch);
         return env->NewStringUTF("ОШИБКА: не удалось выделить память для контекста.");
     }
-    for (size_t i = 0; i < tokens.size(); ++i) {
-        batch.token[i] = tokens[i];
-        batch.pos[i] = static_cast<llama_pos>(i);
-        batch.n_seq_id[i] = 1;
-        batch.seq_id[i][0] = 0;
-        batch.logits[i] = (i + 1 == tokens.size()) ? 1 : 0;
-    }
-    batch.n_tokens = static_cast<int32_t>(tokens.size());
-    if (llama_decode(g_context, batch) != 0) {
-        llama_batch_free(batch);
-        return env->NewStringUTF("ОШИБКА: модель не смогла обработать контекст. Уменьши объём текста или размер окна.");
+    for (size_t offset = 0; offset < tokens.size(); offset += static_cast<size_t>(batch_capacity)) {
+        const size_t count = std::min(static_cast<size_t>(batch_capacity), tokens.size() - offset);
+        batch.n_tokens = static_cast<int32_t>(count);
+        for (size_t i = 0; i < count; ++i) {
+            const size_t token_index = offset + i;
+            batch.token[i] = tokens[token_index];
+            batch.pos[i] = static_cast<llama_pos>(token_index);
+            batch.n_seq_id[i] = 1;
+            batch.seq_id[i][0] = 0;
+            batch.logits[i] = (token_index + 1 == tokens.size()) ? 1 : 0;
+        }
+        if (llama_decode(g_context, batch) != 0) {
+            llama_batch_free(batch);
+            return env->NewStringUTF("ОШИБКА: модель не смогла обработать контекст. Уменьши объём текста или размер окна.");
+        }
     }
 
     std::string output;
