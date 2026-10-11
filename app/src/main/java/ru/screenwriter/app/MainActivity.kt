@@ -690,8 +690,8 @@ object StoryPromptBuilder {
             }
         }
     }
-        return "<|im_start|>system\\n" + context + "\\n<|im_end|>\\n<|im_start|>user\\nКОМАНДА АВТОРА:\\n" +
-            command + "\\nВыполни команду и верни только готовый литературный текст без пояснений. /no_think<|im_end|>\\n<|im_start|>assistant\\n"
+        return "<|im_start|>system\n" + context + "\n<|im_end|>\n<|im_start|>user\nКОМАНДА АВТОРА:\n" +
+            command + "\nВыполни команду и верни только готовый литературный текст без пояснений. /no_think<|im_end|>\n<|im_start|>assistant\n"
     }
 }
 
