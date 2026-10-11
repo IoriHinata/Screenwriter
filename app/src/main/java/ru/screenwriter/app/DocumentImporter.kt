@@ -109,7 +109,10 @@ object DocumentImporter {
         return raw.replace(Regex("\\{\\\\fonttbl.*?\\}"), "")
             .replace(Regex("\\{\\\\colortbl.*?\\}"), "")
             .replace(Regex("\\'[0-9a-fA-F]{2}"), " ")
-            .replace(Regex("\\\\u(-?\\d+)\\??"), " ")
+            .replace(Regex("\\\\u(-?\\d+)\\??")) { match ->
+                val signedCode = match.groupValues[1].toIntOrNull() ?: 32
+                ((signedCode + 65536) % 65536).toChar().toString()
+            }
             .replace(Regex("\\\\[a-zA-Z]+-?\\d* ?"), " ")
             .replace("}", " ").replace("{", " ")
     }
