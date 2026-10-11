@@ -2,6 +2,7 @@ package ru.screenwriter.app
 
 import android.content.Context
 import android.os.Bundle
+import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -254,7 +255,14 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
     var exportScreenplay by remember { mutableStateOf(false) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) {
-            context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(buildExport(story, exportScreenplay)) }
+            runCatching {
+                val output = context.contentResolver.openOutputStream(uri) ?: error("Не удалось открыть файл для записи")
+                output.bufferedWriter(Charsets.UTF_8).use { it.write(buildExport(story, exportScreenplay)) }
+            }.onSuccess {
+                Toast.makeText(context, "Экспорт сохранён", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(context, "Ошибка экспорта: ${it.message ?: "не удалось записать файл"}", Toast.LENGTH_LONG).show()
+            }
         }
     }
     var command by remember { mutableStateOf("") }
@@ -376,9 +384,9 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                     Text("История готова выйти из чата", color = Paper, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp)); Text("Экспортируй материал в удобном формате. Файл сохранится в выбранное место на устройстве.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
                     Spacer(Modifier.height(22.dp))
-                    ExportCard("Книга · TXT", "Заголовок, главы и сплошной литературный текст", onClick = { exportScreenplay = false; exportLauncher.launch("${story.title}.txt") })
+                    ExportCard("Книга · TXT", "Заголовок, главы и сплошной литературный текст", onClick = { exportScreenplay = false; exportLauncher.launch(safeFileName("${story.title}.txt")) })
                     Spacer(Modifier.height(12.dp))
-                    ExportCard("Сценарий · TXT", "Сцены, описания действия и диалоги в сценарной структуре", onClick = { exportScreenplay = true; exportLauncher.launch("${story.title}_scenario.txt") })
+                    ExportCard("Сценарий · TXT", "Сцены, описания действия и диалоги в сценарной структуре", onClick = { exportScreenplay = true; exportLauncher.launch(safeFileName("${story.title}_scenario.txt")) })
                     Spacer(Modifier.height(20.dp))
                     Text("Совет: можно редактировать любую сцену вручную, а командой «Изменить сцену» — заменить последнюю сцену новым вариантом.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
                 }
@@ -506,6 +514,11 @@ object OfflineStoryEngine {
         }
     }
 }
+
+private fun safeFileName(name: String): String = name
+    .replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_")
+    .replace("?", "_").replace("\"", "_").replace("<", "_").replace(">", "_").replace("|", "_")
+    .replace("\n", " ").replace("\r", " ").trim().ifBlank { "История.txt" }
 
 private fun buildExport(story: Story, screenplay: Boolean): String {
     val out = StringBuilder()
