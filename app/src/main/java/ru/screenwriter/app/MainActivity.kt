@@ -670,7 +670,8 @@ object StoryPromptBuilder {
         append("\nПеред ответом проверь знания персонажей, предметы, обещания, травмы, отношения, хронологию и незакрытые сюжетные вопросы. При переписывании сцены не изменяй предыдущие сцены.")
     }
 
-    fun generationPrompt(story: Story, kind: String, command: String): String = buildString {
+    fun generationPrompt(story: Story, kind: String, command: String): String {
+        val context = buildString {
         append(systemPrompt(story, kind))
         val words = command.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 4 }.toSet()
         val recentStart = (story.scenes.size - FULL_SCENES).coerceAtLeast(0)
@@ -688,8 +689,9 @@ object StoryPromptBuilder {
                 append("\n")
             }
         }
-        append("\n\nКОМАНДА АВТОРА:\n").append(command)
-        append("\n\nВыполни команду и верни только готовый литературный текст без пояснений.")
+    }
+        return "<|im_start|>system\\n" + context + "\\n<|im_end|>\\n<|im_start|>user\\nКОМАНДА АВТОРА:\\n" +
+            command + "\\nВыполни команду и верни только готовый литературный текст без пояснений. /no_think<|im_end|>\\n<|im_start|>assistant\\n"
     }
 }
 
