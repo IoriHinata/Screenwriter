@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -275,7 +276,7 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
     var editedScene by remember { mutableIntStateOf(-1) }
     var editText by remember { mutableStateOf("") }
     val types = listOf("Продолжить", "Изменить сцену", "Добавить героя", "Событие", "Направить сюжет")
-    Column(Modifier.fillMaxSize().background(Ink)) {
+    Column(Modifier.fillMaxSize().background(Ink).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад", tint = Paper) }
             Column(Modifier.weight(1f)) {
@@ -325,7 +326,7 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                     }
                 }
                 Column(Modifier.fillMaxWidth().background(Panel).padding(12.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                         types.forEach { t ->
                             val short = when(t) { "Продолжить" -> "Дальше"; "Изменить сцену" -> "Правка"; "Добавить героя" -> "Герой"; "Событие" -> "Событие"; else -> "Вектор" }
                             FilterChip(selected = kind == t, onClick = { kind = t }, label = { Text(short, fontSize = 11.sp) })
