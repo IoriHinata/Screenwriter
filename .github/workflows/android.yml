@@ -46,7 +46,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   model:
-    if: github.event_name == 'workflow_dispatch' && inputs.include_model
+    if: (github.event_name == 'workflow_dispatch' && inputs.include_model) || (github.event_name == 'push' && contains(github.event.head_commit.message, 'Download Qwen model artifact once'))
     runs-on: ubuntu-24.04
     steps:
       - name: Download Qwen3-4B Q4_K_M GGUF
