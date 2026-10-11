@@ -157,14 +157,10 @@ fun ScreenwriterApp(store: StoryStore) {
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             try {
-                val imported = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-                        ?: error("Не удалось открыть файл")
-                }
-                require(imported.isNotBlank()) { "Файл пуст или не является текстовым документом" }
-                val rawName = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
-                val story = Story(title = rawName ?: "Импортированная история",
-                    scenes = mutableListOf(Scene("Импорт документа", imported, "Импорт")) )
+                val (fileName, imported) = withContext(Dispatchers.IO) { DocumentImporter.readText(context, uri) }
+                val title = fileName.substringBeforeLast('.', fileName).ifBlank { "Импортированная история" }
+                val story = Story(title = title,
+                    scenes = mutableListOf(Scene("Импорт документа: $fileName", imported, "Импорт")) )
                 stories = (stories + story).toMutableList()
                 store.save(stories)
                 currentId = story.id
@@ -202,7 +198,7 @@ fun ScreenwriterApp(store: StoryStore) {
                 else -> HomeScreen(
                     stories = stories,
                     onCreate = { creating = true },
-                    onImport = { importLauncher.launch(arrayOf("text/*", "application/json", "application/xml")) },
+                    onImport = { importLauncher.launch(arrayOf("*/*")) },
                     onOpen = { currentId = it },
                     onSettings = { settings = true }
                 )
@@ -240,7 +236,7 @@ fun HomeScreen(stories: List<Story>, onCreate: () -> Unit, onImport: () -> Unit,
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(15.dp)) {
-            Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp)); Text("Импортировать текстовый файл")
+            Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp)); Text("Импортировать документ")
         }
         Spacer(Modifier.height(24.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
