@@ -659,7 +659,7 @@ object StoryPromptBuilder {
             val compactCount = (story.scenes.size - FULL_SCENES).coerceAtLeast(0)
             if (compactCount > 0) {
                 append("АРХИВ СЦЕН (компактный канон; полные выдержки важных сцен добавляются ниже):\n")
-                val archiveIndices = (listOf(0, 1) + (2 until compactCount).takeLast(10)).distinct().filter { it in 0 until compactCount }
+                val archiveIndices = (listOf(0, 1) + (2 until compactCount).toList().takeLast(10)).distinct().filter { it in 0 until compactCount }
                 archiveIndices.forEach { index ->
                     val scene = story.scenes[index]
                     val text = scene.text
