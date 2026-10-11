@@ -358,7 +358,8 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                                         }
                                         onChanged()
                                     } catch (e: Exception) {
-                                        generationError = "Ошибка ИИ: ${e.message ?: "не удалось получить ответ"}. Проверь адрес, модель, ключ и подключение."
+                                        command = userCommand
+                                        generationError = "Ошибка ИИ: ${e.message ?: "не удалось получить ответ"}. Команда сохранена в поле; проверь адрес, модель, ключ и подключение."
                                     } finally { generating = false }
                                 }
                             }
