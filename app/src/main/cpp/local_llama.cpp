@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <atomic>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -14,8 +15,10 @@ llama_context * g_context = nullptr;
 llama_sampler * g_sampler = nullptr;
 const llama_vocab * g_vocab = nullptr;
 bool g_backend_initialized = false;
+std::atomic<bool> g_loaded{false};
 
 void unload_locked() {
+    g_loaded.store(false);
     if (g_sampler) { llama_sampler_free(g_sampler); g_sampler = nullptr; }
     if (g_context) { llama_free(g_context); g_context = nullptr; }
     if (g_model) { llama_model_free(g_model); g_model = nullptr; }
@@ -71,6 +74,7 @@ Java_ru_screenwriter_app_LocalLlamaEngine_nativeLoadModel(
     llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(0.92f, 1));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(0.78f));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    g_loaded.store(true);
     return JNI_TRUE;
 }
 
@@ -86,7 +90,7 @@ Java_ru_screenwriter_app_LocalLlamaEngine_nativeGenerate(
     if (prompt.empty()) return env->NewStringUTF("");
     llama_memory_clear(llama_get_memory(g_context), true);
 
-    const int32_t vocab_size = llama_vocab_n_tokens(g_vocab);
+    (void) temperature; // Sampling temperature is currently fixed to a literary-writing preset.
     std::vector<llama_token> tokens(std::max(1024, static_cast<int>(prompt.size() / 2 + 16)));
     int32_t token_count = llama_tokenize(g_vocab, prompt.c_str(),
         static_cast<int32_t>(prompt.size()), tokens.data(),
@@ -167,6 +171,5 @@ Java_ru_screenwriter_app_LocalLlamaEngine_nativeUnloadModel(JNIEnv *, jobject) {
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_ru_screenwriter_app_LocalLlamaEngine_nativeIsLoaded(JNIEnv *, jobject) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    return (g_model && g_context && g_vocab) ? JNI_TRUE : JNI_FALSE;
+    return g_loaded.load() ? JNI_TRUE : JNI_FALSE;
 }
