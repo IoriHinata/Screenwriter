@@ -552,8 +552,8 @@ fun FieldLabel(text: String) {
 }
 
 object StoryPromptBuilder {
-    private const val FULL_SCENES = 5
-    private const val MAX_SCENE_CHARS = 2200
+    private const val FULL_SCENES = 4
+    private const val MAX_SCENE_CHARS = 1500
 
     fun systemPrompt(story: Story, kind: String): String = buildString {
         append("Ты — профессиональный соавтор и редактор художественной прозы. Пиши по-русски, выразительно и без клише. Не пересказывай уже написанное и не противоречь канону. Соблюдай причинность, голоса персонажей, хронологию и указания автора. Не объясняй подтекст, если он должен оставаться скрытым. Тип действия: ").append(kind).append(".\n\n")
@@ -570,21 +570,24 @@ object StoryPromptBuilder {
         if (story.scenes.isEmpty()) append("[Сцен пока нет]") else {
             val compactCount = (story.scenes.size - FULL_SCENES).coerceAtLeast(0)
             if (compactCount > 0) {
-                append("РАННИЕ СЦЕНЫ (сжатые выдержки; не игнорируй закреплённые факты):\n")
-                story.scenes.take(compactCount).forEachIndexed { index, scene ->
+                append("АРХИВ СЦЕН (компактный канон; полные выдержки важных сцен добавляются ниже):\\n")
+                val archiveIndices = (listOf(0, 1) + (2 until compactCount).takeLast(10)).distinct().filter { it in 0 until compactCount }
+                archiveIndices.forEach { index ->
+                    val scene = story.scenes[index]
                     val text = scene.text
-                    append("\n--- СЦЕНА ").append(index + 1).append(" · ").append(scene.kind).append(" ---\n")
-                    if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command.take(240)).append("\n")
-                    if (text.length <= 440) append(text) else append(text.take(220)).append("\n[… пропущена середина сцены …]\n").append(text.takeLast(220))
-                    append("\n")
+                    append("\\n--- СЦЕНА ").append(index + 1).append(" · ").append(scene.kind).append(" ---\\n")
+                    if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command.take(160)).append("\\n")
+                    if (text.length <= 240) append(text) else append(text.take(120)).append(" […] ").append(text.takeLast(120))
+                    append("\\n")
                 }
+                if (compactCount > archiveIndices.size) append("\\n[В архиве ещё ").append(compactCount - archiveIndices.size).append(" сцен; не выдумывай их содержание.]\\n")
             }
             story.scenes.takeLast(FULL_SCENES).forEachIndexed { index, scene ->
-                append("\n--- ПОСЛЕДНЯЯ ЧАСТЬ КАНОНА · СЦЕНА ").append(compactCount + index + 1).append(" · ").append(scene.kind).append(" ---\n")
-                if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command.take(300)).append("\n")
+                append("\\n--- ПОСЛЕДНЯЯ ЧАСТЬ КАНОНА · СЦЕНА ").append(compactCount + index + 1).append(" · ").append(scene.kind).append(" ---\\n")
+                if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command.take(220)).append("\\n")
                 append(scene.text.take(MAX_SCENE_CHARS))
-                if (scene.text.length > MAX_SCENE_CHARS) append("\n[… сцена обрезана по бюджету контекста …]")
-                append("\n")
+                if (scene.text.length > MAX_SCENE_CHARS) append("\\n[… сцена обрезана по бюджету контекста …]")
+                append("\\n")
             }
         }
         append("\nПеред ответом проверь знания персонажей, предметы, обещания, травмы, отношения, хронологию и незакрытые сюжетные вопросы. При переписывании сцены не изменяй предыдущие сцены.")
