@@ -457,7 +457,7 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                                     try {
                                         val generated = withContext(Dispatchers.IO) {
                                             if (!LocalLlamaEngine.isLoaded()) throw IllegalStateException("Сначала открой настройки и импортируй локальную GGUF-модель. Сетевой ИИ отключён.")
-                                            LocalLlamaEngine.generate(StoryPromptBuilder.generationPrompt(story, userKind, userCommand), maxTokens = 512)
+                                            LocalLlamaEngine.generate(StoryPromptBuilder.generationPrompt(story, userKind, userCommand, WritingKnowledge.forMode(context, userKind)), maxTokens = 512)
                                         }
                                         when (userKind) {
                                             "Изменить сцену" -> if (story.scenes.isNotEmpty()) {
@@ -681,9 +681,12 @@ object StoryPromptBuilder {
         append("\nПеред ответом проверь знания персонажей, предметы, обещания, травмы, отношения, хронологию и незакрытые сюжетные вопросы. При переписывании сцены не изменяй предыдущие сцены.")
     }
 
-    fun generationPrompt(story: Story, kind: String, command: String): String {
+    fun generationPrompt(story: Story, kind: String, command: String, writingKnowledge: String = ""): String {
         val context = buildString {
         append(systemPrompt(story, kind))
+        if (writingKnowledge.isNotBlank()) {
+            append("\n\nПРИНЦИПЫ ПИСАТЕЛЬСКОЙ МАСТЕРСКОЙ:\n").append(writingKnowledge)
+        }
         val words = command.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 4 }.toSet()
         val recentStart = (story.scenes.size - FULL_SCENES).coerceAtLeast(0)
         val relevant = story.scenes.take(recentStart).mapIndexedNotNull { index, scene ->
