@@ -460,9 +460,20 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                                             LocalLlamaEngine.generate(StoryPromptBuilder.generationPrompt(story, userKind, userCommand), maxTokens = 512)
                                         }
                                         when (userKind) {
-                                            "Изменить сцену" -> if (story.scenes.isNotEmpty()) story.scenes[story.scenes.lastIndex] = story.scenes.last().copy(command = userCommand, text = generated, kind = "Переписанная сцена") else story.scenes.add(Scene(userCommand, generated, "Сцена"))
+                                            "Изменить сцену" -> if (story.scenes.isNotEmpty()) {
+                                                val previous = story.scenes.last()
+                                                story.scenes[story.scenes.lastIndex] = previous.copy(command = userCommand, text = generated, kind = "Переписанная сцена", revisions = previous.revisions + previous.text)
+                                            } else story.scenes.add(Scene(userCommand, generated, "Сцена"))
+                                            "Редактор" -> if (story.scenes.isNotEmpty()) {
+                                                val previous = story.scenes.last()
+                                                story.scenes[story.scenes.lastIndex] = previous.copy(command = userCommand, text = generated, kind = "Отредактированная сцена", revisions = previous.revisions + previous.text)
+                                            } else story.scenes.add(Scene(userCommand, generated, "Отредактированная сцена"))
                                             "Добавить героя" -> { story.characters = (story.characters + "\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Персонаж")) }
                                             "Событие" -> { story.events = (story.events + "\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Событие")) }
+                                            "Критик", "Проверить канон" -> {
+                                                story.notes = (story.notes + "\n\n--- " + userKind.uppercase() + " ---\n" + generated).trim()
+                                                Toast.makeText(context, "Результат сохранён в заметках проекта", Toast.LENGTH_LONG).show()
+                                            }
                                             else -> story.scenes.add(Scene(userCommand, generated, userKind))
                                         }
                                         onChanged()
