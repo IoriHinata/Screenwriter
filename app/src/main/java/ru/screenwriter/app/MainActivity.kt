@@ -35,6 +35,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -242,6 +243,13 @@ fun CreateStoryScreen(onCancel: () -> Unit, onCreate: (String, String, String, S
 
 @Composable
 fun StoryEditor(story: Story, onBack: () -> Unit, onChanged: () -> Unit, onExport: (Boolean) -> Unit) {
+    val context = LocalContext.current
+    var exportScreenplay by remember { mutableStateOf(false) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) {
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(buildExport(story, exportScreenplay)) }
+        }
+    }
     var command by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf("Продолжить") }
     var activeTab by remember { mutableIntStateOf(0) }
@@ -343,9 +351,9 @@ fun StoryEditor(story: Story, onBack: () -> Unit, onChanged: () -> Unit, onExpor
                     Text("История готова выйти из чата", color = Paper, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp)); Text("Экспортируй материал в удобном формате. Файл сохранится в выбранное место на устройстве.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
                     Spacer(Modifier.height(22.dp))
-                    ExportCard("Книга · TXT", "Заголовок, главы и сплошной литературный текст", onClick = { onExport(false) })
+                    ExportCard("Книга · TXT", "Заголовок, главы и сплошной литературный текст", onClick = { exportScreenplay = false; exportLauncher.launch("${story.title}.txt") })
                     Spacer(Modifier.height(12.dp))
-                    ExportCard("Сценарий · TXT", "Сцены, описания действия и диалоги в сценарной структуре", onClick = { onExport(true) })
+                    ExportCard("Сценарий · TXT", "Сцены, описания действия и диалоги в сценарной структуре", onClick = { exportScreenplay = true; exportLauncher.launch("${story.title}_scenario.txt") })
                     Spacer(Modifier.height(20.dp))
                     Text("Совет: можно редактировать любую сцену вручную, а командой «Изменить сцену» — заменить последнюю сцену новым вариантом.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
                 }
@@ -417,6 +425,28 @@ object OfflineStoryEngine {
     }
 }
 
-private fun exportText(story: Story, screenplay: Boolean) {
-    // Export launchers are owned by the activity; the editor exposes format intent through app state.
+private fun buildExport(story: Story, screenplay: Boolean): String {
+    val out = StringBuilder()
+    if (!screenplay) {
+        out.append(story.title.uppercase()).append("\\n\\n")
+        if (story.genre.isNotBlank()) out.append(story.genre).append("\\n\\n")
+        story.scenes.forEachIndexed { index, scene ->
+            out.append("Глава ").append(index + 1).append("\\n\\n")
+            out.append(scene.text.trim()).append("\\n\\n")
+        }
+        if (story.scenes.isEmpty()) out.append("История пока не содержит сцен.\\n")
+    } else {
+        out.append(story.title.uppercase()).append("\\n")
+        out.append("СЦЕНАРИЙ · ").append(story.genre.uppercase()).append("\\n\\n")
+        story.scenes.forEachIndexed { index, scene ->
+            out.append("СЦЕНА ${index + 1} — ${scene.kind.uppercase()}\\n")
+            out.append("ИНТ. / НАТ. — МЕСТО НЕ УКАЗАНО — ВРЕМЯ НЕ УКАЗАНО\\n\\n")
+            out.append(scene.text.trim()).append("\\n\\n")
+        }
+        if (story.scenes.isEmpty()) out.append("Сцен пока нет.\\n")
+    }
+    out.append("\\n---\\nМир: ").append(story.world).append("\\nСеттинг: ").append(story.setting)
+    out.append("\\nПерсонажи:\\n").append(story.characters)
+    out.append("\\nСобытия:\\n").append(story.events)
+    return out.toString()
 }
