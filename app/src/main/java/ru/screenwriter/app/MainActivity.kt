@@ -48,6 +48,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.util.concurrent.Executors
 
 private val Ink = Color(0xFF17191F)
 private val Panel = Color(0xFF22252D)
@@ -73,11 +78,16 @@ data class Story(
 )
 
 class StoryStore(context: Context) {
-    private val prefs = context.getSharedPreferences("screenwriter", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences("screenwriter", Context.MODE_PRIVATE)
+    private val storiesFile = File(appContext.filesDir, "stories.json")
+    private val writer = Executors.newSingleThreadExecutor()
     fun modelPath(): String = prefs.getString("local_model_path", "") ?: ""
     fun saveModelPath(path: String) { prefs.edit().putString("local_model_path", path).apply() }
     fun load(): MutableList<Story> {
-        val arr = JSONArray(prefs.getString("stories", "[]"))
+        val legacy = prefs.getString("stories", "[]") ?: "[]"
+        val serialized = if (storiesFile.isFile) runCatching { storiesFile.readText(Charsets.UTF_8) }.getOrDefault("[]") else legacy
+        val arr = JSONArray(serialized)
         val result = mutableListOf<Story>()
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
@@ -96,20 +106,35 @@ class StoryStore(context: Context) {
         return result
     }
     fun save(stories: List<Story>) {
-        val arr = JSONArray()
-        stories.forEach { story ->
-            val o = JSONObject().put("id", story.id).put("title", story.title).put("world", story.world)
-                .put("setting", story.setting).put("genre", story.genre).put("characters", story.characters).put("events", story.events)
-                .put("folder", story.folder).put("volume", story.volume).put("notes", story.notes)
-            val scenes = JSONArray()
-            story.scenes.forEach { scene ->
-                val revisionArray = JSONArray()
-                scene.revisions.forEach { revisionArray.put(it) }
-                scenes.put(JSONObject().put("command", scene.command).put("text", scene.text).put("kind", scene.kind).put("revisions", revisionArray))
-            }
-            o.put("scenes", scenes); arr.put(o)
+        // Snapshot mutable state quickly; serialize and commit on a single background queue.
+        val snapshot = stories.map { story ->
+            story.copy(scenes = story.scenes.map { it.copy(revisions = it.revisions.toList()) }.toMutableList())
         }
-        prefs.edit().putString("stories", arr.toString()).apply()
+        writer.execute {
+            runCatching {
+                val arr = JSONArray()
+                snapshot.forEach { story ->
+                    val o = JSONObject().put("id", story.id).put("title", story.title).put("world", story.world)
+                        .put("setting", story.setting).put("genre", story.genre).put("characters", story.characters).put("events", story.events)
+                        .put("folder", story.folder).put("volume", story.volume).put("notes", story.notes)
+                    val scenes = JSONArray()
+                    story.scenes.forEach { scene ->
+                        val revisionArray = JSONArray()
+                        scene.revisions.forEach { revisionArray.put(it) }
+                        scenes.put(JSONObject().put("command", scene.command).put("text", scene.text).put("kind", scene.kind).put("revisions", revisionArray))
+                    }
+                    o.put("scenes", scenes); arr.put(o)
+                }
+                val temp = File(appContext.filesDir, "stories.json.tmp")
+                temp.writeText(arr.toString(), Charsets.UTF_8)
+                try {
+                    Files.move(temp.toPath(), storiesFile.toPath(), REPLACE_EXISTING, ATOMIC_MOVE)
+                } catch (_: Exception) {
+                    Files.move(temp.toPath(), storiesFile.toPath(), REPLACE_EXISTING)
+                }
+                prefs.edit().remove("stories").apply()
+            }
+        }
     }
 }
 
@@ -687,7 +712,9 @@ private fun buildExport(story: Story, screenplay: Boolean): String {
         if (story.scenes.isEmpty()) out.append("Сцен пока нет.\n")
     }
     out.append("\n---\nМир: ").append(story.world).append("\nСеттинг: ").append(story.setting)
+    out.append("\nПапка: ").append(story.folder).append("\nТом: ").append(story.volume)
     out.append("\nПерсонажи:\n").append(story.characters)
     out.append("\nСобытия:\n").append(story.events)
+    out.append("\nЗаметки автора:\n").append(story.notes)
     return out.toString()
 }
