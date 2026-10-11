@@ -404,9 +404,6 @@ fun SettingsScreen(store: StoryStore, onBack: () -> Unit) {
     var model by remember { mutableStateOf(store.model()) }
     var apiKey by remember { mutableStateOf(AiRuntimeConfig.apiKey) }
     var saved by remember { mutableStateOf(false) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) modelPath = uri.lastPathSegment ?: uri.toString()
-    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад", tint = Paper) }
         Text("Настройки мастерской", color = Paper, fontSize = 27.sp, fontWeight = FontWeight.Bold)
@@ -442,7 +439,7 @@ object AiRuntimeConfig { @Volatile var apiKey: String = "" }
 
 object OpenAiCompatibleClient {
     fun generate(baseUrl: String, model: String, apiKey: String, story: Story, kind: String, command: String): String {
-        require(baseUrl.startsWith("https://") || baseUrl.startsWith("http://10.0.2.2")) { "Используй HTTPS-адрес API или адрес эмулятора 10.0.2.2" }
+        require(baseUrl.startsWith("https://")) { "Для защиты данных используй HTTPS-адрес API" }
         require(model.isNotBlank()) { "Не указана модель" }
         val connection = (java.net.URL(baseUrl.trimEnd('/') + "/chat/completions").openConnection() as java.net.HttpURLConnection).apply {
             requestMethod = "POST"
