@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -342,8 +343,8 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                                         }
                                         when (userKind) {
                                             "Изменить сцену" -> if (story.scenes.isNotEmpty()) story.scenes[story.scenes.lastIndex] = story.scenes.last().copy(command = userCommand, text = generated, kind = "Переписанная сцена") else story.scenes.add(Scene(userCommand, generated, "Сцена"))
-                                            "Добавить героя" -> { story.characters = (story.characters + "\\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Персонаж")) }
-                                            "Событие" -> { story.events = (story.events + "\\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Событие")) }
+                                            "Добавить героя" -> { story.characters = (story.characters + "\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Персонаж")) }
+                                            "Событие" -> { story.events = (story.events + "\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Событие")) }
                                             else -> story.scenes.add(Scene(userCommand, generated, "Сцена"))
                                         }
                                         onChanged()
@@ -416,7 +417,7 @@ fun SettingsScreen(store: StoryStore, onBack: () -> Unit) {
         Spacer(Modifier.height(10.dp))
         OutlinedTextField(model, { model = it; saved = false }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Название модели") }, placeholder = { Text("gpt-4o-mini") })
         Spacer(Modifier.height(10.dp))
-        OutlinedTextField(apiKey, { apiKey = it; saved = false }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("API-ключ (не сохраняется на диск)") }, placeholder = { Text("Вставь ключ провайдера") })
+        OutlinedTextField(apiKey, { apiKey = it; saved = false }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), label = { Text("API-ключ (не сохраняется на диск)") }, placeholder = { Text("Вставь ключ провайдера") })
         Spacer(Modifier.height(12.dp))
         Button(onClick = { store.saveAiSettings(endpoint, model); AiRuntimeConfig.apiKey = apiKey.trim(); saved = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Сохранить настройки ИИ") }
         if (saved) Text("Настройки сохранены. Ключ действует до закрытия приложения.", color = Sage, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
@@ -455,7 +456,7 @@ object OpenAiCompatibleClient {
                 .put("temperature", 0.85)
                 .put("messages", JSONArray()
                     .put(JSONObject().put("role", "system").put("content", StoryPromptBuilder.systemPrompt(story, kind)))
-                    .put(JSONObject().put("role", "user").put("content", "КОМАНДА АВТОРА:\\n$command\\n\\nВыполни команду и верни только готовый литературный текст без пояснений.")))
+                    .put(JSONObject().put("role", "user").put("content", "КОМАНДА АВТОРА:\n$command\n\nВыполни команду и верни только готовый литературный текст без пояснений.")))
             connection.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(payload.toString()) }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
@@ -470,19 +471,19 @@ object OpenAiCompatibleClient {
 
 object StoryPromptBuilder {
     fun systemPrompt(story: Story, kind: String): String = buildString {
-        append("Ты — профессиональный соавтор и редактор художественной прозы. Пиши по-русски, выразительно, без клише. Не пересказывай уже написанное и не противоречь фактам истории. Соблюдай причинность, голоса персонажей, хронологию, жанр и указания автора. Не объясняй подтекст, если он должен оставаться скрытым. Тип действия: ").append(kind).append(".\\n\\n")
-        append("НАЗВАНИЕ: ").append(story.title).append("\\nЖАНР: ").append(story.genre)
-        append("\\nМИР И ПРАВИЛА: ").append(story.world.ifBlank { "Не заданы" })
-        append("\\nСЕТТИНГ И НАСТРОЕНИЕ: ").append(story.setting.ifBlank { "Не заданы" })
-        append("\\nПЕРСОНАЖИ И ОТНОШЕНИЯ: ").append(story.characters.ifBlank { "Пока не заданы" })
-        append("\\nЗАФИКСИРОВАННЫЕ СОБЫТИЯ: ").append(story.events.ifBlank { "Пока не заданы" })
-        append("\\n\\nПОЛНЫЙ ТЕКСТ ИСТОРИИ (все сохранённые сцены по порядку; это канон):\\n")
+        append("Ты — профессиональный соавтор и редактор художественной прозы. Пиши по-русски, выразительно, без клише. Не пересказывай уже написанное и не противоречь фактам истории. Соблюдай причинность, голоса персонажей, хронологию, жанр и указания автора. Не объясняй подтекст, если он должен оставаться скрытым. Тип действия: ").append(kind).append(".\n\n")
+        append("НАЗВАНИЕ: ").append(story.title).append("\nЖАНР: ").append(story.genre)
+        append("\nМИР И ПРАВИЛА: ").append(story.world.ifBlank { "Не заданы" })
+        append("\nСЕТТИНГ И НАСТРОЕНИЕ: ").append(story.setting.ifBlank { "Не заданы" })
+        append("\nПЕРСОНАЖИ И ОТНОШЕНИЯ: ").append(story.characters.ifBlank { "Пока не заданы" })
+        append("\nЗАФИКСИРОВАННЫЕ СОБЫТИЯ: ").append(story.events.ifBlank { "Пока не заданы" })
+        append("\n\nПОЛНЫЙ ТЕКСТ ИСТОРИИ (все сохранённые сцены по порядку; это канон):\n")
         if (story.scenes.isEmpty()) append("[Сцен пока нет]") else story.scenes.forEachIndexed { index, scene ->
-            append("\\n--- СЦЕНА ").append(index + 1).append(" · ").append(scene.kind).append(" ---\\n")
-            if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command).append("\\n")
-            append(scene.text).append("\\n")
+            append("\n--- СЦЕНА ").append(index + 1).append(" · ").append(scene.kind).append(" ---\n")
+            if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command).append("\n")
+            append(scene.text).append("\n")
         }
-        append("\\nПеред ответом проверь непрерывность: знания персонажей, предметы, обещания, травмы, отношения, хронологию и незакрытые сюжетные вопросы. При переписывании сцены не изменяй предыдущие сцены.")
+        append("\nПеред ответом проверь непрерывность: знания персонажей, предметы, обещания, травмы, отношения, хронологию и незакрытые сюжетные вопросы. При переписывании сцены не изменяй предыдущие сцены.")
     }
 }
 
