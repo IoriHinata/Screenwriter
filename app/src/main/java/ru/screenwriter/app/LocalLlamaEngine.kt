@@ -60,25 +60,33 @@ object LocalLlamaEngine {
         val modelsDir = File(context.filesDir, "models").apply { mkdirs() }
         val destination = File(modelsDir, "writing-model.gguf")
         val partial = File(modelsDir, "writing-model.gguf.partial")
-        context.contentResolver.openInputStream(uri).use { input ->
-            requireNotNull(input) { "Не удалось открыть выбранный файл." }
-            input.buffered().use { source ->
-                FileOutputStream(partial).buffered().use { output -> source.copyTo(output, 1024 * 1024) }
+        try {
+            context.contentResolver.openInputStream(uri).use { input ->
+                requireNotNull(input) { "Не удалось открыть выбранный файл." }
+                input.buffered().use { source ->
+                    FileOutputStream(partial).buffered().use { output -> source.copyTo(output, 1024 * 1024) }
+                }
             }
+            require(partial.length() > 1024L * 1024L && isGguf(partial)) {
+                "Выбранный файл не похож на GGUF-модель: проверь файл и повтори импорт."
+            }
+            // Do not destroy the last valid model until the replacement has been copied and verified.
+            try {
+                java.nio.file.Files.move(
+                    partial.toPath(), destination.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
+                )
+            } catch (_: Exception) {
+                java.nio.file.Files.move(
+                    partial.toPath(), destination.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            }
+            return destination
+        } finally {
+            if (partial.exists()) partial.delete()
         }
-        if (!isGguf(partial)) {
-            partial.delete()
-            throw IllegalArgumentException("Выбранный файл не является корректным GGUF-файлом (не найден заголовок GGUF).")
-        }
-        if (destination.exists() && !destination.delete()) {
-            partial.delete()
-            throw IllegalStateException("Не удалось заменить предыдущую модель.")
-        }
-        if (!partial.renameTo(destination)) {
-            partial.copyTo(destination, overwrite = true)
-            partial.delete()
-        }
-        return destination
     }
 
     private fun isGguf(file: File): Boolean = runCatching {
