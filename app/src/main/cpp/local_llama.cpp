@@ -106,7 +106,7 @@ Java_ru_screenwriter_app_LocalLlamaEngine_nativeGenerate(
         tokens.resize(static_cast<size_t>(-token_count));
         token_count = llama_tokenize(g_vocab, prompt.c_str(),
             static_cast<int32_t>(prompt.size()), tokens.data(),
-            static_cast<int32_t>(tokens.size()), true, false);
+            static_cast<int32_t>(tokens.size()), true, true);
     }
     if (token_count <= 0) return env->NewStringUTF("ОШИБКА: не удалось токенизировать контекст.");
     tokens.resize(static_cast<size_t>(token_count));
