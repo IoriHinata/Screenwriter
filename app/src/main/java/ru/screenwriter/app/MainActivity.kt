@@ -344,6 +344,31 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
             Tab(activeTab == 2, { activeTab = 2 }, text = { Text("Заметки") }, icon = { Icon(Icons.Default.EditNote, null, modifier = Modifier.size(17.dp)) })
             Tab(activeTab == 3, { activeTab = 3 }, text = { Text("Экспорт") }, icon = { Icon(Icons.Default.Download, null, modifier = Modifier.size(17.dp)) })
         }
+        if (showRevisionsFor >= 0 && showRevisionsFor < story.scenes.size) {
+            val sceneIndex = showRevisionsFor
+            val revisionScene = story.scenes[sceneIndex]
+            val revisionsNewestFirst = revisionScene.revisions.asReversed()
+            AlertDialog(
+                onDismissRequest = { showRevisionsFor = -1 },
+                title = { Text("Версии сцены " + (sceneIndex + 1)) },
+                text = {
+                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(revisionsNewestFirst) { revisionIndex, revision ->
+                            Column(Modifier.fillMaxWidth().background(Panel2, RoundedCornerShape(10.dp)).padding(10.dp)) {
+                                Text("Версия " + (revisionScene.revisions.size - revisionIndex), color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(revision.take(320), color = Paper, fontSize = 12.sp, maxLines = 5, overflow = TextOverflow.Ellipsis)
+                                TextButton(onClick = {
+                                    story.scenes[sceneIndex] = revisionScene.copy(text = revision, revisions = revisionScene.revisions + revisionScene.text)
+                                    showRevisionsFor = -1
+                                    onChanged()
+                                }) { Text("Восстановить эту версию", color = Gold) }
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showRevisionsFor = -1 }) { Text("Закрыть") }
+            )
+        }
         when (activeTab) {
             0 -> {
                 if (story.scenes.isEmpty()) {
@@ -368,6 +393,11 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                                         TextButton(onClick = { story.scenes[index] = scene.copy(text = editText, revisions = scene.revisions + scene.text); editedScene = -1; onChanged() }) { Text("Сохранить", color = Gold) }
                                     }
                                 } else Text(scene.text, color = Paper, fontSize = 15.sp, lineHeight = 23.sp)
+                                if (scene.revisions.isNotEmpty()) {
+                                    TextButton(onClick = { showRevisionsFor = index }) {
+                                        Text("История версий (" + scene.revisions.size + ")", color = Muted, fontSize = 11.sp)
+                                    }
+                                }
                             }
                         }
                     }
