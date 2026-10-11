@@ -57,7 +57,7 @@ private val Muted = Color(0xFFA6A9B2)
 private val Gold = Color(0xFFE7B56B)
 private val Sage = Color(0xFF9DB6A0)
 
-data class Scene(val command: String, val text: String, val kind: String = "Сцена")
+data class Scene(val command: String, val text: String, val kind: String = "Сцена", val revisions: List<String> = emptyList())
 data class Story(
     val id: Long = System.currentTimeMillis(),
     var title: String,
@@ -85,7 +85,9 @@ class StoryStore(context: Context) {
             val scenes = mutableListOf<Scene>()
             for (j in 0 until scenesJson.length()) {
                 val s = scenesJson.getJSONObject(j)
-                scenes.add(Scene(s.optString("command"), s.optString("text"), s.optString("kind", "Сцена")))
+                val revisionsJson = s.optJSONArray("revisions") ?: JSONArray()
+                val revisions = (0 until revisionsJson.length()).map { revisionsJson.optString(it) }
+                scenes.add(Scene(s.optString("command"), s.optString("text"), s.optString("kind", "Сцена"), revisions))
             }
             result.add(Story(o.optLong("id"), o.optString("title"), o.optString("world"), o.optString("setting"),
                 o.optString("genre", "Психологическая проза"), o.optString("characters"), o.optString("events"), scenes,
@@ -100,7 +102,11 @@ class StoryStore(context: Context) {
                 .put("setting", story.setting).put("genre", story.genre).put("characters", story.characters).put("events", story.events)
                 .put("folder", story.folder).put("volume", story.volume).put("notes", story.notes)
             val scenes = JSONArray()
-            story.scenes.forEach { scenes.put(JSONObject().put("command", it.command).put("text", it.text).put("kind", it.kind)) }
+            story.scenes.forEach { scene ->
+                val revisionArray = JSONArray()
+                scene.revisions.forEach { revisionArray.put(it) }
+                scenes.put(JSONObject().put("command", scene.command).put("text", scene.text).put("kind", scene.kind).put("revisions", revisionArray))
+            }
             o.put("scenes", scenes); arr.put(o)
         }
         prefs.edit().putString("stories", arr.toString()).apply()
@@ -314,7 +320,8 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
     var showInfo by remember { mutableStateOf(false) }
     var editedScene by remember { mutableIntStateOf(-1) }
     var editText by remember { mutableStateOf("") }
-    val types = listOf("Продолжить", "Изменить сцену", "Добавить героя", "Событие", "Направить сюжет")
+    var showRevisionsFor by remember { mutableIntStateOf(-1) }
+    val types = listOf("Продолжить", "Изменить сцену", "Добавить героя", "Событие", "Сюжетный поворот", "Диалог", "Редактор", "Критик", "Проверить канон")
     Column(Modifier.fillMaxSize().background(Ink).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад", tint = Paper) }
@@ -358,7 +365,7 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                                     OutlinedTextField(editText, { editText = it }, modifier = Modifier.fillMaxWidth(), minLines = 4)
                                     Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                                         TextButton(onClick = { editedScene = -1 }) { Text("Отмена") }
-                                        TextButton(onClick = { story.scenes[index] = scene.copy(text = editText); editedScene = -1; onChanged() }) { Text("Сохранить", color = Gold) }
+                                        TextButton(onClick = { story.scenes[index] = scene.copy(text = editText, revisions = scene.revisions + scene.text); editedScene = -1; onChanged() }) { Text("Сохранить", color = Gold) }
                                     }
                                 } else Text(scene.text, color = Paper, fontSize = 15.sp, lineHeight = 23.sp)
                             }
@@ -368,7 +375,7 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                 Column(Modifier.fillMaxWidth().background(Panel).padding(12.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                         types.forEach { t ->
-                            val short = when(t) { "Продолжить" -> "Дальше"; "Изменить сцену" -> "Правка"; "Добавить героя" -> "Герой"; "Событие" -> "Событие"; else -> "Вектор" }
+                            val short = when(t) { "Продолжить" -> "Дальше"; "Изменить сцену" -> "Правка"; "Добавить героя" -> "Герой"; "Событие" -> "Событие"; "Сюжетный поворот" -> "Поворот"; "Диалог" -> "Диалог"; "Редактор" -> "Редактор"; "Критик" -> "Критик"; else -> "Канон" }
                             FilterChip(selected = kind == t, onClick = { kind = t }, label = { Text(short, fontSize = 11.sp) })
                         }
                     }
@@ -394,7 +401,7 @@ fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: 
                                             "Изменить сцену" -> if (story.scenes.isNotEmpty()) story.scenes[story.scenes.lastIndex] = story.scenes.last().copy(command = userCommand, text = generated, kind = "Переписанная сцена") else story.scenes.add(Scene(userCommand, generated, "Сцена"))
                                             "Добавить героя" -> { story.characters = (story.characters + "\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Персонаж")) }
                                             "Событие" -> { story.events = (story.events + "\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Событие")) }
-                                            else -> story.scenes.add(Scene(userCommand, generated, "Сцена"))
+                                            else -> story.scenes.add(Scene(userCommand, generated, userKind))
                                         }
                                         onChanged()
                                     } catch (e: Exception) {
