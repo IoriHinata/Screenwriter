@@ -115,7 +115,15 @@ Java_ru_screenwriter_app_LocalLlamaEngine_nativeGenerate(
     const int reserve = std::max(64, std::min(1024, static_cast<int>(max_tokens)));
     const int prompt_limit = std::max(128, context_limit - reserve);
     if (static_cast<int>(tokens.size()) > prompt_limit) {
-        tokens.erase(tokens.begin(), tokens.end() - prompt_limit);
+        // Keep both the opening system rules and the tail containing the author's command.
+        // Trimming only from the front silently discarded the system prompt on long projects.
+        const int prefix_count = std::min(512, std::max(128, prompt_limit / 3));
+        const int suffix_count = prompt_limit - prefix_count;
+        std::vector<llama_token> bounded;
+        bounded.reserve(static_cast<size_t>(prompt_limit));
+        bounded.insert(bounded.end(), tokens.begin(), tokens.begin() + prefix_count);
+        bounded.insert(bounded.end(), tokens.end() - suffix_count, tokens.end());
+        tokens.swap(bounded);
     }
 
     const int32_t batch_capacity = static_cast<int32_t>(std::min<uint32_t>(512, llama_n_batch(g_context)));
