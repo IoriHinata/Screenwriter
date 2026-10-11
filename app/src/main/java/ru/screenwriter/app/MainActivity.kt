@@ -2,6 +2,9 @@ package ru.screenwriter.app
 
 import android.content.Context
 import android.os.Bundle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -65,6 +68,9 @@ data class Story(
 
 class StoryStore(context: Context) {
     private val prefs = context.getSharedPreferences("screenwriter", Context.MODE_PRIVATE)
+    fun endpoint(): String = prefs.getString("ai_endpoint", "https://api.openai.com/v1") ?: "https://api.openai.com/v1"
+    fun model(): String = prefs.getString("ai_model", "gpt-4o-mini") ?: "gpt-4o-mini"
+    fun saveAiSettings(endpoint: String, model: String) { prefs.edit().putString("ai_endpoint", endpoint.trim().trimEnd('/')).putString("ai_model", model.trim()).apply() }
     fun load(): MutableList<Story> {
         val arr = JSONArray(prefs.getString("stories", "[]"))
         val result = mutableListOf<Story>()
@@ -117,7 +123,7 @@ fun ScreenwriterApp(store: StoryStore) {
     )) {
         Surface(Modifier.fillMaxSize(), color = Ink) {
             when {
-                settings -> SettingsScreen(onBack = { settings = false })
+                settings -> SettingsScreen(store = store, onBack = { settings = false })
                 creating -> CreateStoryScreen(
                     onCancel = { creating = false },
                     onCreate = { title, world, setting, genre, characters ->
@@ -128,8 +134,9 @@ fun ScreenwriterApp(store: StoryStore) {
                 )
                 current != null -> StoryEditor(
                     story = current,
+                    store = store,
                     onBack = { persist(); currentId = null },
-                    onChanged = { persist() },
+                    onChanged = { persist() }
                 )
                 else -> HomeScreen(
                     stories = stories,
@@ -241,7 +248,7 @@ fun CreateStoryScreen(onCancel: () -> Unit, onCreate: (String, String, String, S
 }
 
 @Composable
-fun StoryEditor(story: Story, onBack: () -> Unit, onChanged: () -> Unit, onExport: (Boolean) -> Unit) {
+fun StoryEditor(story: Story, store: StoryStore, onBack: () -> Unit, onChanged: () -> Unit) {
     val context = LocalContext.current
     var exportScreenplay by remember { mutableStateOf(false) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
@@ -251,6 +258,9 @@ fun StoryEditor(story: Story, onBack: () -> Unit, onChanged: () -> Unit, onExpor
     }
     var command by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf("Продолжить") }
+    var generating by remember { mutableStateOf(false) }
+    var generationError by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     var activeTab by remember { mutableIntStateOf(0) }
     var showInfo by remember { mutableStateOf(false) }
     var editedScene by remember { mutableIntStateOf(-1) }
@@ -312,26 +322,41 @@ fun StoryEditor(story: Story, onBack: () -> Unit, onChanged: () -> Unit, onExpor
                             FilterChip(selected = kind == t, onClick = { kind = t }, label = { Text(short, fontSize = 11.sp) })
                         }
                     }
+                    if (generationError.isNotBlank()) Text(generationError, color = Color(0xFFFF9B91), fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
                     Row(verticalAlignment = Alignment.Bottom) {
-                        OutlinedTextField(value = command, onValueChange = { command = it }, modifier = Modifier.weight(1f),
+                        OutlinedTextField(value = command, onValueChange = { command = it }, enabled = !generating, modifier = Modifier.weight(1f),
                             placeholder = { Text("Опиши действие или изменение…", fontSize = 13.sp) }, minLines = 2, maxLines = 5)
                         Spacer(Modifier.width(8.dp))
                         FilledIconButton(onClick = {
-                            if (command.isNotBlank()) {
-                                val generated = OfflineStoryEngine.generate(story, kind, command)
-                                when (kind) {
-                                    "Изменить сцену" -> if (story.scenes.isNotEmpty()) story.scenes[story.scenes.lastIndex] = story.scenes.last().copy(command = command, text = generated, kind = "Переписанная сцена") else story.scenes.add(Scene(command, generated, "Сцена"))
-                                    "Добавить героя" -> { story.characters = (story.characters + "\n" + command).trim(); story.scenes.add(Scene(command, generated, "Персонаж")) }
-                                    "Событие" -> { story.events = (story.events + "\n" + command).trim(); story.scenes.add(Scene(command, generated, "Событие")) }
-                                    else -> story.scenes.add(Scene(command, generated, "Сцена"))
+                            if (command.isNotBlank() && !generating) {
+                                val userCommand = command.trim()
+                                val userKind = kind
+                                command = ""
+                                generationError = ""
+                                generating = true
+                                scope.launch {
+                                    try {
+                                        val generated = withContext(Dispatchers.IO) {
+                                            if (AiRuntimeConfig.apiKey.isNotBlank()) OpenAiCompatibleClient.generate(store.endpoint(), store.model(), AiRuntimeConfig.apiKey, story, userKind, userCommand)
+                                            else OfflineStoryEngine.generate(story, userKind, userCommand)
+                                        }
+                                        when (userKind) {
+                                            "Изменить сцену" -> if (story.scenes.isNotEmpty()) story.scenes[story.scenes.lastIndex] = story.scenes.last().copy(command = userCommand, text = generated, kind = "Переписанная сцена") else story.scenes.add(Scene(userCommand, generated, "Сцена"))
+                                            "Добавить героя" -> { story.characters = (story.characters + "\\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Персонаж")) }
+                                            "Событие" -> { story.events = (story.events + "\\n" + userCommand).trim(); story.scenes.add(Scene(userCommand, generated, "Событие")) }
+                                            else -> story.scenes.add(Scene(userCommand, generated, "Сцена"))
+                                        }
+                                        onChanged()
+                                    } catch (e: Exception) {
+                                        generationError = "Ошибка ИИ: ${e.message ?: "не удалось получить ответ"}. Проверь адрес, модель, ключ и подключение."
+                                    } finally { generating = false }
                                 }
-                                command = ""; onChanged()
                             }
-                        }, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.size(52.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.Send, "Отправить")
+                        }, enabled = !generating && command.isNotBlank(), colors = IconButtonDefaults.filledIconButtonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.size(52.dp)) {
+                            if (generating) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Ink) else Icon(Icons.AutoMirrored.Filled.Send, "Отправить")
                         }
                     }
-                    Text("Локальный черновой движок · без отправки текста в сеть", color = Muted.copy(alpha = .7f), fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                    Text(if (AiRuntimeConfig.apiKey.isNotBlank()) "ИИ подключён · полный текст истории включён в контекст" else "Офлайн-шаблоны. Для генерации языковой моделью подключи API в настройках.", color = Muted.copy(alpha = .7f), fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
                 }
             }
             1 -> {
@@ -374,8 +399,11 @@ fun ExportCard(title: String, desc: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
-    var modelPath by remember { mutableStateOf("Не выбрана") }
+fun SettingsScreen(store: StoryStore, onBack: () -> Unit) {
+    var endpoint by remember { mutableStateOf(store.endpoint()) }
+    var model by remember { mutableStateOf(store.model()) }
+    var apiKey by remember { mutableStateOf(AiRuntimeConfig.apiKey) }
+    var saved by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) modelPath = uri.lastPathSegment ?: uri.toString()
     }
@@ -383,15 +411,21 @@ fun SettingsScreen(onBack: () -> Unit) {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад", tint = Paper) }
         Text("Настройки мастерской", color = Paper, fontSize = 27.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(20.dp))
-        Text("ЛОКАЛЬНАЯ МОДЕЛЬ", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Text("МОДЕЛЬ И КОНТЕКСТ", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
         Spacer(Modifier.height(8.dp))
-        Text("Сейчас приложение работает офлайн и сохраняет истории на устройстве. Поддержка запуска GGUF-модели требует встроенного inference-движка и подходящих весов; в этой сборке нейросетевые веса ещё не включены.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
-        Spacer(Modifier.height(14.dp))
-        OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(8.dp)); Text("Выбрать файл модели") }
-        Spacer(Modifier.height(8.dp)); Text("Выбрано: $modelPath", color = Muted, fontSize = 12.sp)
-        Spacer(Modifier.height(24.dp))
-        Text("ПАРАМЕТРЫ ГЕНЕРАЦИИ", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
-        Text("В этой версии настройки длины и температуры пока не подключены к нейросети. Данные историй не покидают устройство.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
+        Text("Подключи сервер, совместимый с OpenAI Chat Completions. В каждый запрос входят мир, сеттинг, жанр, персонажи, события и полный текст всех сцен. История хранится на устройстве. API-ключ держится только в памяти до закрытия приложения и не сохраняется на диск.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
+        Spacer(Modifier.height(16.dp))
+        OutlinedTextField(endpoint, { endpoint = it; saved = false }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Адрес API") }, placeholder = { Text("https://api.openai.com/v1") })
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(model, { model = it; saved = false }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Название модели") }, placeholder = { Text("gpt-4o-mini") })
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(apiKey, { apiKey = it; saved = false }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("API-ключ (не сохраняется на диск)") }, placeholder = { Text("Вставь ключ провайдера") })
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = { store.saveAiSettings(endpoint, model); AiRuntimeConfig.apiKey = apiKey.trim(); saved = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Сохранить настройки ИИ") }
+        if (saved) Text("Настройки сохранены. Ключ действует до закрытия приложения.", color = Sage, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+        Spacer(Modifier.height(20.dp))
+        Text("ЛОКАЛЬНАЯ МОДЕЛЬ GGUF", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+        Text("Выбор GGUF-файла не запускает модель: в этой сборке нет native inference-движка и весов. Этот вариант использует подключённый API; для полностью автономной генерации потребуется отдельная интеграция llama.cpp.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
         Spacer(Modifier.height(24.dp))
         Text("БИБЛИОТЕКА ПИСАТЕЛЯ", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
         Text("Встроенные подсказки движка помогают оформлять команду, сцену и сюжетные заметки. Полноценная скрытая база писательских знаний и её retrieval-механизм — следующий этап реализации.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
@@ -402,6 +436,57 @@ fun SettingsScreen(onBack: () -> Unit) {
 fun FieldLabel(text: String) {
     Text(text, color = Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp)
     Spacer(Modifier.height(6.dp))
+}
+
+object AiRuntimeConfig { @Volatile var apiKey: String = "" }
+
+object OpenAiCompatibleClient {
+    fun generate(baseUrl: String, model: String, apiKey: String, story: Story, kind: String, command: String): String {
+        require(baseUrl.startsWith("https://") || baseUrl.startsWith("http://10.0.2.2")) { "Используй HTTPS-адрес API или адрес эмулятора 10.0.2.2" }
+        require(model.isNotBlank()) { "Не указана модель" }
+        val connection = (java.net.URL(baseUrl.trimEnd('/') + "/chat/completions").openConnection() as java.net.HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 20_000
+            readTimeout = 180_000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            if (apiKey.isNotBlank()) setRequestProperty("Authorization", "Bearer $apiKey")
+        }
+        try {
+            val payload = JSONObject()
+                .put("model", model)
+                .put("temperature", 0.85)
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", StoryPromptBuilder.systemPrompt(story, kind)))
+                    .put(JSONObject().put("role", "user").put("content", "КОМАНДА АВТОРА:\\n$command\\n\\nВыполни команду и верни только готовый литературный текст без пояснений.")))
+            connection.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(payload.toString()) }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) throw IllegalStateException("HTTP $code: ${body.take(500)}")
+            val content = JSONObject(body).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.optString("content").orEmpty().trim()
+            if (content.isBlank() || content == "null") throw IllegalStateException("Модель вернула пустой ответ")
+            return content
+        } finally { connection.disconnect() }
+    }
+}
+
+object StoryPromptBuilder {
+    fun systemPrompt(story: Story, kind: String): String = buildString {
+        append("Ты — профессиональный соавтор и редактор художественной прозы. Пиши по-русски, выразительно, без клише. Не пересказывай уже написанное и не противоречь фактам истории. Соблюдай причинность, голоса персонажей, хронологию, жанр и указания автора. Не объясняй подтекст, если он должен оставаться скрытым. Тип действия: ").append(kind).append(".\\n\\n")
+        append("НАЗВАНИЕ: ").append(story.title).append("\\nЖАНР: ").append(story.genre)
+        append("\\nМИР И ПРАВИЛА: ").append(story.world.ifBlank { "Не заданы" })
+        append("\\nСЕТТИНГ И НАСТРОЕНИЕ: ").append(story.setting.ifBlank { "Не заданы" })
+        append("\\nПЕРСОНАЖИ И ОТНОШЕНИЯ: ").append(story.characters.ifBlank { "Пока не заданы" })
+        append("\\nЗАФИКСИРОВАННЫЕ СОБЫТИЯ: ").append(story.events.ifBlank { "Пока не заданы" })
+        append("\\n\\nПОЛНЫЙ ТЕКСТ ИСТОРИИ (все сохранённые сцены по порядку; это канон):\\n")
+        if (story.scenes.isEmpty()) append("[Сцен пока нет]") else story.scenes.forEachIndexed { index, scene ->
+            append("\\n--- СЦЕНА ").append(index + 1).append(" · ").append(scene.kind).append(" ---\\n")
+            if (scene.command.isNotBlank()) append("Команда автора: ").append(scene.command).append("\\n")
+            append(scene.text).append("\\n")
+        }
+        append("\\nПеред ответом проверь непрерывность: знания персонажей, предметы, обещания, травмы, отношения, хронологию и незакрытые сюжетные вопросы. При переписывании сцены не изменяй предыдущие сцены.")
+    }
 }
 
 object OfflineStoryEngine {
