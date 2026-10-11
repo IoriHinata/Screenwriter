@@ -576,7 +576,7 @@ fun SettingsScreen(store: StoryStore, onBack: () -> Unit) {
         }
         Text("Для телефона с 8 ГБ RAM начни с 4096. Значение 8192 требует больше памяти и может завершить приложение на некоторых устройствах.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
         Spacer(Modifier.height(14.dp))
-        Button(onClick = { picker.launch(arrayOf("application/octet-stream", "*/*")) }, enabled = !busy,
+        Button(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !busy,
             modifier = Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) {
             Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp)); Text("Выбрать файл GGUF")
         }
