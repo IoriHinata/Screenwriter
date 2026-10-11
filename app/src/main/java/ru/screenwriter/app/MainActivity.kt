@@ -130,7 +130,7 @@ fun ScreenwriterApp(store: StoryStore) {
                     story = current,
                     onBack = { persist(); currentId = null },
                     onChanged = { persist() },
-                    onExport = { screenplay -> exportText(current, screenplay) }
+                    onExport = { }
                 )
                 else -> HomeScreen(
                     stories = stories,
